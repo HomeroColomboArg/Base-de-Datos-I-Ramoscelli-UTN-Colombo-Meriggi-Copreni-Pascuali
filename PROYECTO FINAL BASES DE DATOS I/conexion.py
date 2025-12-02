@@ -6,7 +6,7 @@ def conectar():
             host="127.0.0.1",                  # Host donde está la base de datos
             port='3307',                       # Puerto de conexión
             user="root",                      # Usuario de MySQL
-            password="ulises2014",      # Contraseña de ese usuario
+            password="contraseña",      # Contraseña de ese usuario
             database="biblioteca_db"  # Nombre de la base de datos
         )
         if mydb.is_connected():
@@ -18,4 +18,5 @@ def conectar():
         return None
 
     return None
+
 
