@@ -1,8 +1,319 @@
 from conexion import conectar
 
-# =========================
-#   OPCIÓN 5: REPORTE DE MOROSOS
-# =========================
+#   1) GESTIÓN DE USUARIOS 
+
+
+def submenu_usuarios(conexion):
+    while True:
+        print("""
+----- GESTIÓN DE USUARIOS -----
+1. Agregar usuario
+2. Ver usuarios
+3. Actualizar usuario
+4. Eliminar usuario (baja lógica)
+0. Volver al menú principal
+""")
+        opcion = input("Seleccione una opción: ").strip()
+
+        if opcion == "1":
+            agregar_usuario(conexion)
+        elif opcion == "2":
+            ver_usuarios(conexion)
+        elif opcion == "3":
+            actualizar_usuario(conexion)
+        elif opcion == "4":
+            eliminar_usuario(conexion)
+        elif opcion == "0":
+            return
+        else:
+            print("Opción inválida.")
+
+
+def agregar_usuario(conexion):
+    cursor = conexion.cursor()
+
+    print("\n=== AGREGAR NUEVO USUARIO ===")
+
+    nombre = input("Nombre: ").strip()
+    apellido = input("Apellido: ").strip()
+    dni = input("DNI: ").strip()
+    email = input("Email: ").strip()
+    telefono = input("Teléfono: ").strip()
+
+    consulta = """
+        INSERT INTO usuarios (nombre, apellido, dni, email, telefono, fecha_alta, activo)
+        VALUES (%s, %s, %s, %s, %s, CURDATE(), 1);
+    """
+
+    try:
+        cursor.execute(consulta, (nombre, apellido, dni, email, telefono))
+        conexion.commit()
+        print("\nUsuario agregado correctamente.")
+    except Exception as e:
+        print(f"Error al agregar usuario: {e}")
+
+    cursor.close()
+
+
+def ver_usuarios(conexion):
+    cursor = conexion.cursor(dictionary=True)
+    print("\n=== LISTA DE USUARIOS ===")
+
+    consulta = """
+        SELECT id_usuario, nombre, apellido, dni, email, telefono, activo
+        FROM usuarios
+        ORDER BY id_usuario;
+    """
+
+    cursor.execute(consulta)
+    usuarios = cursor.fetchall()
+
+    if not usuarios:
+        print("No hay usuarios cargados.")
+    else:
+        for u in usuarios:
+            estado = "Activo" if u["activo"] == 1 else "Inactivo"
+            print(
+                f"ID: {u['id_usuario']:2d} | "
+                f"{u['nombre']} {u['apellido']} | "
+                f"DNI: {u['dni']} | "
+                f"Email: {u['email']} | "
+                f"Tel: {u['telefono']} | "
+                f"Estado: {estado}"
+            )
+
+    cursor.close()
+
+
+def actualizar_usuario(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== ACTUALIZAR USUARIO ===")
+    id_usuario = input("Ingrese el ID del usuario a actualizar: ").strip()
+
+    cursor.execute("SELECT * FROM usuarios WHERE id_usuario = %s;", (id_usuario,))
+    usuario = cursor.fetchone()
+
+    if not usuario:
+        print("No existe un usuario con ese ID.")
+        cursor.close()
+        return
+
+    print(f"Actualizando a: {usuario['nombre']} {usuario['apellido']}")
+
+    nuevo_nombre = input(f"Nuevo nombre ({usuario['nombre']}): ").strip() or usuario['nombre']
+    nuevo_apellido = input(f"Nuevo apellido ({usuario['apellido']}): ").strip() or usuario['apellido']
+    nuevo_email = input(f"Nuevo email ({usuario['email']}): ").strip() or usuario['email']
+    nuevo_tel = input(f"Nuevo teléfono ({usuario['telefono']}): ").strip() or usuario['telefono']
+
+    consulta = """
+        UPDATE usuarios
+        SET nombre = %s, apellido = %s, email = %s, telefono = %s
+        WHERE id_usuario = %s;
+    """
+
+    cursor2 = conexion.cursor()
+    cursor2.execute(consulta, (nuevo_nombre, nuevo_apellido, nuevo_email, nuevo_tel, id_usuario))
+    conexion.commit()
+
+    print("\nUsuario actualizado correctamente.")
+
+    cursor.close()
+    cursor2.close()
+
+
+def eliminar_usuario(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== ELIMINAR (BAJA LÓGICA) ===")
+    id_usuario = input("Ingrese el ID del usuario: ").strip()
+
+    cursor.execute("SELECT * FROM usuarios WHERE id_usuario = %s;", (id_usuario,))
+    usuario = cursor.fetchone()
+
+    if not usuario:
+        print("No existe ese usuario.")
+        cursor.close()
+        return
+
+    confirmar = input(f"¿Dar de baja al usuario {usuario['nombre']} {usuario['apellido']}? (s/n): ").strip().lower()
+
+    if confirmar != "s":
+        print("Operación cancelada.")
+        cursor.close()
+        return
+
+    cursor2 = conexion.cursor()
+    cursor2.execute("UPDATE usuarios SET activo = 0 WHERE id_usuario = %s;", (id_usuario,))
+    conexion.commit()
+
+    print("\nUsuario dado de baja correctamente.")
+
+    cursor.close()
+    cursor2.close()
+
+
+#   2) GESTIÓN DE LIBROS 
+
+
+def submenu_libros(conexion):
+    while True:
+        print("""
+----- GESTIÓN DE LIBROS -----
+1. Registrar libro
+2. Ver libros
+3. Actualizar libro
+4. Eliminar libro
+0. Volver al menú principal
+""")
+        opcion = input("Seleccione una opción: ").strip()
+
+        if opcion == "1":
+            registrar_libro(conexion)
+        elif opcion == "2":
+            ver_libros(conexion)
+        elif opcion == "3":
+            actualizar_libro(conexion)
+        elif opcion == "4":
+            eliminar_libro(conexion)
+        elif opcion == "0":
+            return
+        else:
+            print("Opción inválida.")
+
+
+def registrar_libro(conexion):
+    cursor = conexion.cursor()
+
+    print("\n=== REGISTRO DE NUEVO LIBRO ===")
+
+    titulo = input("Título: ").strip()
+    autor = input("Autor: ").strip()
+    anio = input("Año de publicación: ").strip()
+    isbn = input("ISBN: ").strip()
+    editorial = input("Editorial: ").strip()
+    categoria = input("Categoría: ").strip()
+
+    consulta = """
+        INSERT INTO libros (titulo, autor, anio_publicacion, isbn, editorial, categoria)
+        VALUES (%s, %s, %s, %s, %s, %s);
+    """
+
+    try:
+        cursor.execute(consulta, (titulo, autor, anio, isbn, editorial, categoria))
+        conexion.commit()
+        print("\nLibro registrado correctamente.")
+    except Exception as e:
+        print(f"Error al registrar libro: {e}")
+
+    cursor.close()
+
+
+def ver_libros(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== LISTA DE LIBROS ===")
+
+    consulta = """
+        SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
+        FROM libros
+        ORDER BY id_libro;
+    """
+
+    cursor.execute(consulta)
+    libros = cursor.fetchall()
+
+    if not libros:
+        print("No hay libros cargados.")
+    else:
+        for l in libros:
+            print(
+                f"ID: {l['id_libro']:2d} | "
+                f"{l['titulo']} | "
+                f"{l['autor']} | "
+                f"Año: {l['anio_publicacion']} | "
+                f"Editorial: {l['editorial']} | "
+                f"Categoría: {l['categoria']}"
+            )
+
+    cursor.close()
+
+
+def actualizar_libro(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== ACTUALIZAR LIBRO ===")
+    id_libro = input("Ingrese el ID del libro: ").strip()
+
+    cursor.execute("SELECT * FROM libros WHERE id_libro = %s;", (id_libro,))
+    libro = cursor.fetchone()
+
+    if not libro:
+        print("No existe un libro con ese ID.")
+        cursor.close()
+        return
+
+    print(f"Actualizando: {libro['titulo']}")
+
+    nuevo_titulo = input(f"Nuevo título ({libro['titulo']}): ").strip() or libro['titulo']
+    nuevo_autor = input(f"Nuevo autor   ({libro['autor']}): ").strip() or libro['autor']
+    nuevo_anio = input(f"Nuevo año     ({libro['anio_publicacion']}): ").strip() or libro['anio_publicacion']
+    nuevo_editorial = input(f"Nuevo editorial ({libro['editorial']}): ").strip() or libro['editorial']
+    nueva_categoria = input(f"Nueva categoría ({libro['categoria']}): ").strip() or libro['categoria']
+
+    consulta = """
+        UPDATE libros
+        SET titulo = %s, autor = %s, anio_publicacion = %s,
+            editorial = %s, categoria = %s
+        WHERE id_libro = %s;
+    """
+
+    cursor2 = conexion.cursor()
+    cursor2.execute(
+        consulta,
+        (nuevo_titulo, nuevo_autor, nuevo_anio, nuevo_editorial, nueva_categoria, id_libro)
+    )
+    conexion.commit()
+
+    print("\nLibro actualizado correctamente.")
+
+    cursor.close()
+    cursor2.close()
+
+
+def eliminar_libro(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== ELIMINAR LIBRO ===")
+    id_libro = input("Ingrese el ID: ").strip()
+
+    cursor.execute("SELECT * FROM libros WHERE id_libro = %s;", (id_libro,))
+    libro = cursor.fetchone()
+
+    if not libro:
+        print("No existe ese libro.")
+        cursor.close()
+        return
+
+    confirmar = input(f"¿Eliminar el libro '{libro['titulo']}'? (s/n): ").lower().strip()
+
+    if confirmar != "s":
+        print("Operación cancelada.")
+        cursor.close()
+        return
+
+    cursor2 = conexion.cursor()
+    cursor2.execute("DELETE FROM libros WHERE id_libro = %s;", (id_libro,))
+    conexion.commit()
+
+    print("\nLibro eliminado correctamente.")
+
+    cursor.close()
+    cursor2.close()
+
+
+#  5) REPORTE DE MOROSOS
+
 def reporte_morosos(conexion):
     cursor = conexion.cursor(dictionary=True)
 
@@ -45,9 +356,9 @@ def reporte_morosos(conexion):
     cursor.close()
 
 
-# =========================
-#   OPCIÓN 6: MODIFICACIÓN DE LA CUOTA
-# =========================
+
+#  6& MODIFICACIÓN DE LA CUOTA
+
 def modificar_cuota_mes(conexion):
     cursor = conexion.cursor(dictionary=True)
 
@@ -151,8 +462,8 @@ def mostrar_menu(conexion):
     while True:
         print("""
 ========= MENÚ BIBLIOTECA =========
-1. Gestión de usuarios        (no implementado)
-2. Gestión de libros          (no implementado)
+1. Gestión de usuarios        
+2. Gestión de libros          
 3. Manejo de préstamos        (no implementado)
 4. Búsqueda y filtrado        (no implementado)
 5. Reporte de morosos
@@ -161,8 +472,12 @@ def mostrar_menu(conexion):
 """)
 
         opcion = input("Seleccione una opción: ").strip()
+        if opcion == "1":
+            submenu_usuarios(conexion)
+        elif opcion == "2":
+            submenu_libros(conexion)
 
-        if opcion == "5":
+        elif opcion == "5":
             reporte_morosos(conexion)
 
         elif opcion == "6":
@@ -204,4 +519,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
