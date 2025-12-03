@@ -1,4 +1,6 @@
-from conexion import conectar
+from PROYECTO_SQL import conectar
+from datetime import date, datetime
+
 
 #   1) GESTIÓN DE USUARIOS 
 
@@ -312,6 +314,264 @@ def eliminar_libro(conexion):
     cursor2.close()
 
 
+#   3) MANEJO DE PRÉSTAMOS  (cálculo de multa)
+
+
+def submenu_prestamos(conexion):
+        while True:
+            print("""
+     ----- MANEJO DE PRÉSTAMOS -----
+     1. Calcular multa por retraso para un socio
+     0. Volver al menú principal
+     """)
+            opcion = input("Seleccione una opción: ").strip()
+
+            if opcion == "1":
+                calcular_multa_socio(conexion)
+            elif opcion == "0":
+                return
+            else:
+                print("Opción inválida.")
+
+
+def calcular_multa_socio(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== CÁLCULO DE MULTA POR RETRASO ===")
+    id_usuario = input("Ingrese el ID del usuario: ").strip()
+
+    
+    cursor.execute("SELECT * FROM usuarios WHERE id_usuario = %s;", (id_usuario,))
+    usuario = cursor.fetchone()
+
+    if not usuario:
+        print("No existe un usuario con ese ID.")
+        cursor.close()
+        return
+
+    
+    consulta = """
+        SELECT 
+            pr.id_prestamo,
+            pr.fecha_prestamo,
+            pr.fecha_vencimiento,
+            pr.fecha_devolucion,
+            pr.estado,
+            pa.monto AS cuota_mensual
+        FROM prestamos pr
+        LEFT JOIN pagos pa
+            ON pa.id_usuario = pr.id_usuario
+           AND pa.anio = YEAR(pr.fecha_vencimiento)
+           AND pa.mes  = MONTH(pr.fecha_vencimiento)
+        WHERE pr.id_usuario = %s
+        ORDER BY pr.fecha_prestamo;
+    """
+    cursor.execute(consulta, (id_usuario,))
+    prestamos = cursor.fetchall()
+    cursor.close()
+
+    if not prestamos:
+        print("\nEse usuario no tiene préstamos registrados.")
+        return
+
+    
+    texto_fecha = input(
+        "Ingrese la fecha actual para el cálculo (YYYY-MM-DD) o deje vacío para usar la fecha de hoy: "
+    ).strip()
+
+    if texto_fecha:
+        try:
+            fecha_hoy = datetime.strptime(texto_fecha, "%Y-%m-%d").date()
+        except ValueError:
+            print("Formato inválido, se usa la fecha de hoy del sistema.")
+            fecha_hoy = date.today()
+    else:
+        fecha_hoy = date.today()
+
+    total_multa = 0  
+
+    print(f"\nPréstamos del usuario {usuario['nombre']} {usuario['apellido']}:\n")
+
+    for p in prestamos:
+        fecha_venc = p["fecha_vencimiento"]
+        fecha_dev = p["fecha_devolucion"]
+        cuota = p["cuota_mensual"]
+
+        
+        if fecha_dev is None:
+            fecha_dev_str = "Todavía no devolvió"
+        else:
+            fecha_dev_str = str(fecha_dev)
+
+        
+        if cuota is None:
+            dias_atraso = 0
+            multa = 0.0
+        else:
+            if fecha_dev is not None:
+                fecha_fin = fecha_dev
+            else:
+                fecha_fin = fecha_hoy
+
+            if fecha_fin > fecha_venc:
+                dias_atraso = (fecha_fin - fecha_venc).days
+                multa = dias_atraso * 0.03 * float(cuota)
+            else:
+                dias_atraso = 0
+                multa = 0.0
+
+        total_multa += multa
+
+        print(
+            f"Préstamo ID: {p['id_prestamo']} | "
+            f"Estado: {p['estado']} | "
+            f"Vence: {fecha_venc} | "
+            f"Devolución: {fecha_dev_str} | "
+            f"Días atraso: {dias_atraso} | "
+            f"Cuota: {cuota if cuota is not None else 'N/A'} | "
+            f"Multa: ${multa:.2f}"
+        )
+
+    print(f"\n>>> Multa TOTAL para el usuario {usuario['nombre']} {usuario['apellido']}: ${total_multa:.2f}")
+
+
+
+#   4) BÚSQUEDA Y FILTRADO
+
+
+def submenu_busqueda(conexion):
+    while True:
+        print("""
+----- BÚSQUEDA Y FILTRADO -----
+1. Buscar libros por título o autor
+2. Buscar usuario por ID
+3. Buscar usuarios por texto (nombre, apellido, DNI o email)
+0. Volver al menú principal
+""")
+        opcion = input("Seleccione una opción: ").strip()
+
+        if opcion == "1":
+            buscar_libros_por_texto(conexion)
+        elif opcion == "2":
+            buscar_usuario_por_id(conexion)
+        elif opcion == "3":
+            buscar_usuarios_por_texto(conexion)
+        elif opcion == "0":
+            return
+        else:
+            print("Opción inválida.")
+
+
+def buscar_libros_por_texto(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== BÚSQUEDA DE LIBROS ===")
+    termino = input("Ingrese parte del título o autor: ").strip()
+
+    if not termino:
+        print("No se ingresó texto de búsqueda.")
+        cursor.close()
+        return
+
+    like = f"%{termino}%"
+
+    consulta = """
+        SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
+        FROM libros
+        WHERE titulo LIKE %s
+           OR autor  LIKE %s
+        ORDER BY titulo;
+    """
+    cursor.execute(consulta, (like, like))
+    libros = cursor.fetchall()
+    cursor.close()
+
+    if not libros:
+        print("No se encontraron libros que coincidan.")
+    else:
+        print("\nResultados:")
+        for l in libros:
+            print(
+                f"ID: {l['id_libro']:2d} | "
+                f"{l['titulo']} | "
+                f"{l['autor']} | "
+                f"Año: {l['anio_publicacion']} | "
+                f"Editorial: {l['editorial']} | "
+                f"Categoría: {l['categoria']}"
+            )
+
+
+def buscar_usuario_por_id(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== BÚSQUEDA DE USUARIO POR ID ===")
+    id_usuario = input("Ingrese el ID del usuario: ").strip()
+
+    consulta = """
+        SELECT id_usuario, nombre, apellido, dni, email, telefono, fecha_alta, activo
+        FROM usuarios
+        WHERE id_usuario = %s;
+    """
+    cursor.execute(consulta, (id_usuario,))
+    usuario = cursor.fetchone()
+    cursor.close()
+
+    if not usuario:
+        print("No se encontró un usuario con ese ID.")
+    else:
+        estado = "Activo" if usuario["activo"] == 1 else "Inactivo"
+        print("\nUsuario encontrado:")
+        print(f"ID       : {usuario['id_usuario']}")
+        print(f"Nombre   : {usuario['nombre']} {usuario['apellido']}")
+        print(f"DNI      : {usuario['dni']}")
+        print(f"Email    : {usuario['email']}")
+        print(f"Teléfono : {usuario['telefono']}")
+        print(f"Fecha alta: {usuario['fecha_alta']}")
+        print(f"Estado   : {estado}")
+
+
+def buscar_usuarios_por_texto(conexion):
+    cursor = conexion.cursor(dictionary=True)
+
+    print("\n=== BÚSQUEDA DE USUARIOS ===")
+    termino = input("Ingrese parte del nombre, apellido, DNI o email: ").strip()
+
+    if not termino:
+        print("No se ingresó texto de búsqueda.")
+        cursor.close()
+        return
+
+    like = f"%{termino}%"
+
+    consulta = """
+        SELECT id_usuario, nombre, apellido, dni, email, telefono, fecha_alta, activo
+        FROM usuarios
+        WHERE nombre   LIKE %s
+           OR apellido LIKE %s
+           OR dni      LIKE %s
+           OR email    LIKE %s
+        ORDER BY apellido, nombre;
+    """
+    cursor.execute(consulta, (like, like, like, like))
+    usuarios = cursor.fetchall()
+    cursor.close()
+
+    if not usuarios:
+        print("No se encontraron usuarios que coincidan.")
+    else:
+        print("\nResultados:")
+        for u in usuarios:
+            estado = "Activo" if u["activo"] == 1 else "Inactivo"
+            print(
+                f"ID: {u['id_usuario']:2d} | "
+                f"{u['nombre']} {u['apellido']} | "
+                f"DNI: {u['dni']} | "
+                f"Email: {u['email']} | "
+                f"Tel: {u['telefono']} | "
+                f"Estado: {estado}"
+            )
+
+
 #  5) REPORTE DE MOROSOS
 
 def reporte_morosos(conexion):
@@ -357,7 +617,7 @@ def reporte_morosos(conexion):
 
 
 
-#  6& MODIFICACIÓN DE LA CUOTA
+#  6) MODIFICACIÓN DE LA CUOTA
 
 def modificar_cuota_mes(conexion):
     cursor = conexion.cursor(dictionary=True)
@@ -464,8 +724,8 @@ def mostrar_menu(conexion):
 ========= MENÚ BIBLIOTECA =========
 1. Gestión de usuarios        
 2. Gestión de libros          
-3. Manejo de préstamos        (no implementado)
-4. Búsqueda y filtrado        (no implementado)
+3. Manejo de préstamos        
+4. Búsqueda y filtrado        
 5. Reporte de morosos
 6. Modificación de la cuota
 0. Salir
@@ -473,22 +733,23 @@ def mostrar_menu(conexion):
 
         opcion = input("Seleccione una opción: ").strip()
         if opcion == "1":
-            submenu_usuarios(conexion)
+                submenu_usuarios(conexion)
         elif opcion == "2":
-            submenu_libros(conexion)
-
+                submenu_libros(conexion)
+        elif opcion == "3":
+                submenu_prestamos(conexion)
+        elif opcion == "4":
+                submenu_busqueda(conexion)
         elif opcion == "5":
-            reporte_morosos(conexion)
-
+                reporte_morosos(conexion)
         elif opcion == "6":
-            modificar_cuota_mes(conexion)
-
+                modificar_cuota_mes(conexion)
         elif opcion == "0":
-            print("Saliendo del sistema...")
-            break
-
+                print("Saliendo del sistema...")
+                break
         else:
-            print("Opción no implementada o inválida.")
+                print("Opción no implementada o inválida.")
+
 
       
         while True:
