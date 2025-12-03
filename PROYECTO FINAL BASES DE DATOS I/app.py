@@ -143,9 +143,9 @@ def modificar_cuota_mes(conexion):
     cursor.close()
 
 
-# =========================
+
 #          MENÚ
-# =========================
+
 def mostrar_menu(conexion):
 
     while True:
@@ -175,7 +175,7 @@ def mostrar_menu(conexion):
         else:
             print("Opción no implementada o inválida.")
 
-        # Preguntar si quiere volver al menú
+      
         while True:
             volver = input("\n¿Desea volver al menú principal? (s/n): ").strip().lower()
             if volver == "s":
@@ -187,9 +187,9 @@ def mostrar_menu(conexion):
                 print("Opción inválida. Responda 's' o 'n'.")
 
 
-# =========================
+
 #   MAIN
-# =========================
+
 def main():
     conexion = conectar()
     if not conexion:
@@ -204,3 +204,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
