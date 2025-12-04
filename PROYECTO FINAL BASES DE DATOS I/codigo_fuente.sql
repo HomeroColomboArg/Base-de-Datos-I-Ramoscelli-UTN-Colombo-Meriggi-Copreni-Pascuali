@@ -29,16 +29,18 @@ CREATE TABLE usuarios (
 -- Información de los libros de la biblioteca
 
 CREATE TABLE libros (
-    id_libro        INT UNSIGNED AUTO_INCREMENT,
-    titulo          VARCHAR(150)     NOT NULL,
-    autor           VARCHAR(100)     NOT NULL,
+    id_libro         INT UNSIGNED AUTO_INCREMENT,
+    titulo           VARCHAR(150) NOT NULL,
+    autor            VARCHAR(100) NOT NULL,
     anio_publicacion INT,
-    isbn            VARCHAR(20),
-    editorial       VARCHAR(100),
-    categoria       VARCHAR(50),
+    isbn             VARCHAR(20),
+    editorial        VARCHAR(100),
+    categoria        VARCHAR(50),
+    activo           TINYINT(1) NOT NULL DEFAULT 1,
     CONSTRAINT pk_libros PRIMARY KEY (id_libro),
     CONSTRAINT uq_libros_isbn UNIQUE (isbn)
 );
+
 
 -- Índice para acelerar búsquedas por título/autor
 CREATE INDEX idx_libros_titulo_autor
