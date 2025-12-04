@@ -192,7 +192,7 @@ def eliminar_usuario(conexion):
     cursor2.close()
 
 
-#   2) gestion de libros 
+#   2) gestion de libros
 
 
 def submenu_libros(conexion):
@@ -202,7 +202,7 @@ def submenu_libros(conexion):
 1. Registrar libro
 2. Ver libros
 3. Actualizar libro
-4. Eliminar libro
+4. Eliminar libro (baja lógica)
 0. Volver al menú principal
 """)
         opcion = input("Seleccione una opción: ").strip()
@@ -234,8 +234,8 @@ def registrar_libro(conexion):
     categoria = input("Categoría: ").strip()
 
     consulta = """
-        INSERT INTO libros (titulo, autor, anio_publicacion, isbn, editorial, categoria)
-        VALUES (%s, %s, %s, %s, %s, %s);
+        INSERT INTO libros (titulo, autor, anio_publicacion, isbn, editorial, categoria, activo)
+        VALUES (%s, %s, %s, %s, %s, %s, 1);
     """
 
     try:
@@ -251,14 +251,14 @@ def registrar_libro(conexion):
 def ver_libros(conexion):
     cursor = conexion.cursor(dictionary=True)
 
+    print("\n=== LISTA DE LIBROS ACTIVOS ===")
 
     consulta = """
-    SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
-    FROM libros
-    WHERE activo = 1
-    ORDER BY id_libro;
-"""
-
+        SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
+        FROM libros
+        WHERE activo = 1
+        ORDER BY id_libro;
+    """
 
     cursor.execute(consulta)
     libros = cursor.fetchall()
@@ -345,10 +345,6 @@ def eliminar_libro(conexion):
         return
 
     cursor2 = conexion.cursor()
-
-    
-    
-
     cursor2.execute(
         "UPDATE libros SET activo = 0 WHERE id_libro = %s;",
         (id_libro,)
@@ -363,6 +359,7 @@ def eliminar_libro(conexion):
 
 
 
+
 # 3) manejo de prestamos con transaccion
 
 def manejo_prestamos(conexion):
@@ -370,6 +367,7 @@ def manejo_prestamos(conexion):
 
     print("\n=== CÁLCULO DE MULTA POR ATRASO ===")
 
+    
     try:
         id_usuario = int(input("Ingrese el ID del usuario: ").strip())
         id_libro = int(input("Ingrese el ID del libro: ").strip())
@@ -378,6 +376,8 @@ def manejo_prestamos(conexion):
         cursor.close()
         return
 
+    
+    # obtener prestamo vigente 
     
     consulta = """
         SELECT 
@@ -391,7 +391,10 @@ def manejo_prestamos(conexion):
         FROM prestamos pr
         JOIN usuarios u ON pr.id_usuario = u.id_usuario
         JOIN libros l ON pr.id_libro = l.id_libro
-        WHERE pr.id_usuario = %s AND pr.id_libro = %s;
+        WHERE pr.id_usuario = %s 
+          AND pr.id_libro = %s
+        ORDER BY pr.id_prestamo DESC
+        LIMIT 1;
     """
 
     cursor.execute(consulta, (id_usuario, id_libro))
@@ -409,7 +412,17 @@ def manejo_prestamos(conexion):
     print(f"- Fecha vencimiento: {prestamo['fecha_vencimiento']}")
     print(f"- Estado actual: {prestamo['estado']}")
 
-    # calculo de dias de atraso
+    
+    # si ya estaba devuelto , no calcular multa ni permitir modificar
+    
+    if prestamo["estado"] == "DEVUELTO":
+        print("\nEste préstamo ya fue devuelto. No se puede modificar ni calcular multa.")
+        cursor.close()
+        return
+
+    
+    # calcular dias de atraso
+ 
     hoy = datetime.now().date()
     fecha_venc = prestamo["fecha_vencimiento"]
 
@@ -419,14 +432,17 @@ def manejo_prestamos(conexion):
 
     print(f"\nDías de atraso: {dias_atraso}")
 
-    # ultima cuota del usuario
+    
+    # traer última cuota del usuario
+  
     cursor.execute("""
         SELECT monto 
         FROM pagos 
-        WHERE id_usuario = %s 
-        ORDER BY anio DESC, mes DESC 
+        WHERE id_usuario = %s
+        ORDER BY anio DESC, mes DESC
         LIMIT 1;
     """, (id_usuario,))
+
     pago = cursor.fetchone()
 
     if not pago:
@@ -439,17 +455,19 @@ def manejo_prestamos(conexion):
 
     print(f"Multa calculada: ${multa:.2f}")
 
+   
     # transaccion
+    
     try:
-        
-        conexion.rollback()
-
         print("\nIniciando transacción...")
+
+        # iniciar transaccion limpia
         conexion.start_transaction()
 
         marcar = input("¿Desea marcar este préstamo como devuelto? (s/n): ").strip().lower()
 
         if marcar == "s":
+            cursor2 = conexion.cursor()
             update = """
                 UPDATE prestamos
                 SET 
@@ -457,9 +475,11 @@ def manejo_prestamos(conexion):
                     fecha_devolucion = CURDATE()
                 WHERE id_prestamo = %s;
             """
-            cursor.execute(update, (prestamo["id_prestamo"],))
+            cursor2.execute(update, (prestamo["id_prestamo"],))
+            cursor2.close()
             print("✔ El préstamo fue marcado como DEVUELTO.")
 
+        # Confirmar
         confirmar = input("¿Confirmar y guardar los cambios? (s/n): ").strip().lower()
 
         if confirmar == "s":
@@ -471,7 +491,7 @@ def manejo_prestamos(conexion):
 
     except Exception as e:
         conexion.rollback()
-        print("\n ERROR: La transacción falló. Cambios revertidos.")
+        print("\n❌ ERROR: La transacción falló. Cambios revertidos.")
         print("Detalle:", e)
 
     cursor.close()
@@ -479,14 +499,14 @@ def manejo_prestamos(conexion):
 
 
 
-#   4) busqueda y filtrado
 
+#   busqueda y fiiltrado
 
 def submenu_busqueda(conexion):
     while True:
         print("""
 ----- BÚSQUEDA Y FILTRADO -----
-1. Buscar libros por título o autor
+1. Buscar libros por texto (título, autor, categoría, editorial o ISBN)
 2. Buscar usuario por ID
 3. Buscar usuarios por texto (nombre, apellido, DNI o email)
 0. Volver al menú principal
@@ -505,11 +525,15 @@ def submenu_busqueda(conexion):
             print("Opción inválida.")
 
 
+
+# 1) buscar libros por texto
+
+
 def buscar_libros_por_texto(conexion):
     cursor = conexion.cursor(dictionary=True)
 
     print("\n=== BÚSQUEDA DE LIBROS ===")
-    termino = input("Ingrese parte del título o autor: ").strip()
+    termino = input("Ingrese parte del título, autor, categoría, editorial o ISBN: ").strip()
 
     if not termino:
         print("No se ingresó texto de búsqueda.")
@@ -519,13 +543,20 @@ def buscar_libros_por_texto(conexion):
     like = f"%{termino}%"
 
     consulta = """
-        SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
+        SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria, isbn
         FROM libros
-        WHERE titulo LIKE %s
-           OR autor  LIKE %s
+        WHERE activo = 1
+          AND (
+                 titulo LIKE %s
+              OR autor LIKE %s
+              OR categoria LIKE %s
+              OR editorial LIKE %s
+              OR isbn LIKE %s
+          )
         ORDER BY titulo;
     """
-    cursor.execute(consulta, (like, like))
+
+    cursor.execute(consulta, (like, like, like, like, like))
     libros = cursor.fetchall()
     cursor.close()
 
@@ -540,8 +571,13 @@ def buscar_libros_por_texto(conexion):
                 f"{l['autor']} | "
                 f"Año: {l['anio_publicacion']} | "
                 f"Editorial: {l['editorial']} | "
-                f"Categoría: {l['categoria']}"
+                f"Categoría: {l['categoria']} | "
+                f"ISBN: {l['isbn']}"
             )
+
+
+
+#  buscar usuario por id
 
 
 def buscar_usuario_por_id(conexion):
@@ -555,6 +591,7 @@ def buscar_usuario_por_id(conexion):
         FROM usuarios
         WHERE id_usuario = %s;
     """
+
     cursor.execute(consulta, (id_usuario,))
     usuario = cursor.fetchone()
     cursor.close()
@@ -564,13 +601,17 @@ def buscar_usuario_por_id(conexion):
     else:
         estado = "Activo" if usuario["activo"] == 1 else "Inactivo"
         print("\nUsuario encontrado:")
-        print(f"ID       : {usuario['id_usuario']}")
-        print(f"Nombre   : {usuario['nombre']} {usuario['apellido']}")
-        print(f"DNI      : {usuario['dni']}")
-        print(f"Email    : {usuario['email']}")
-        print(f"Teléfono : {usuario['telefono']}")
+        print(f"ID        : {usuario['id_usuario']}")
+        print(f"Nombre    : {usuario['nombre']} {usuario['apellido']}")
+        print(f"DNI       : {usuario['dni']}")
+        print(f"Email     : {usuario['email']}")
+        print(f"Teléfono  : {usuario['telefono']}")
         print(f"Fecha alta: {usuario['fecha_alta']}")
-        print(f"Estado   : {estado}")
+        print(f"Estado    : {estado}")
+
+
+
+# buscar usuarios por texto
 
 
 def buscar_usuarios_por_texto(conexion):
@@ -595,6 +636,7 @@ def buscar_usuarios_por_texto(conexion):
            OR email    LIKE %s
         ORDER BY apellido, nombre;
     """
+
     cursor.execute(consulta, (like, like, like, like))
     usuarios = cursor.fetchall()
     cursor.close()
@@ -615,7 +657,8 @@ def buscar_usuarios_por_texto(conexion):
             )
 
 
-#  5) reporte de morosos
+
+# 5) reporte de morosos
 
 def reporte_morosos(conexion):
     cursor = conexion.cursor(dictionary=True)
@@ -630,6 +673,7 @@ def reporte_morosos(conexion):
         JOIN pagos p ON u.id_usuario = p.id_usuario
         WHERE p.pagado = 0
           AND p.fecha_vencimiento < CURDATE()
+          AND u.activo = 1
         GROUP BY u.id_usuario, u.nombre, u.apellido
         ORDER BY meses_adeudados DESC;
     """
@@ -637,13 +681,17 @@ def reporte_morosos(conexion):
     cursor.execute(consulta)
     resultados = cursor.fetchall()
 
+    # Si no hay morosos
     if not resultados:
-        print("\nNo hay usuarios morosos (todos están al día).")
+        print("\n=== REPORTE DE MOROSOS ===")
+        print("No hay usuarios morosos (todos están al día).")
         cursor.close()
         return
 
-    print("\n=== REPORTE DE MOROSOS ===")
+    print("\n=== REPORTE DE MOROSOS ===\n")
+    
     total_meses = 0
+    total_morosos = len(resultados)
 
     for fila in resultados:
         total_meses += fila["meses_adeudados"]
@@ -653,10 +701,16 @@ def reporte_morosos(conexion):
             f"Meses adeudados: {fila['meses_adeudados']}"
         )
 
-    promedio = total_meses / len(resultados)
-    print(f"\nPromedio de meses adeudados entre los morosos: {promedio:.2f}")
+    promedio = total_meses / total_morosos
+
+    print("\n--------------------------------------------")
+    print(f"Total de usuarios morosos : {total_morosos}")
+    print(f"Total de meses adeudados : {total_meses}")
+    print(f"Promedio general         : {promedio:.2f} meses")
+    print("--------------------------------------------")
 
     cursor.close()
+
 
 
 
@@ -665,7 +719,7 @@ def reporte_morosos(conexion):
 def modificar_cuota_mes(conexion):
     cursor = conexion.cursor(dictionary=True)
 
-    #  años disponibles
+    # obtener años disponibles
     cursor.execute("SELECT DISTINCT anio FROM pagos ORDER BY anio;")
     filas_anios = cursor.fetchall()
 
@@ -680,7 +734,7 @@ def modificar_cuota_mes(conexion):
     for anio in anios_disponibles:
         print(f"- {anio}")
 
-    # seleccion de año valido
+    # seleccion del año valido
     while True:
         try:
             anio = int(input("Ingrese el año (YYYY): ").strip())
@@ -690,7 +744,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número entero válido.")
 
-    # meses disponibles
+    # obtener meses disponibles para ese año
     cursor.execute(
         "SELECT DISTINCT mes FROM pagos WHERE anio = %s ORDER BY mes;",
         (anio,)
@@ -702,7 +756,7 @@ def modificar_cuota_mes(conexion):
     for mes in meses_disponibles:
         print(f"- {mes}")
 
-    # seleccion de mes valido
+    # seleccion del mnes valido
     while True:
         try:
             mes = int(input("Ingrese el mes (1-12): ").strip())
@@ -712,7 +766,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número entero válido.")
 
-    # nuevo monto
+    #  ingresar nuevo monto
     while True:
         try:
             nuevo_monto = float(input("Ingrese el nuevo monto: ").strip())
@@ -722,20 +776,32 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número válido.")
 
-    
+    # mostrar cuotas afectadas
     cursor.execute(
         "SELECT id_pago, id_usuario, monto FROM pagos WHERE anio = %s AND mes = %s;",
         (anio, mes)
     )
     cuotas = cursor.fetchall()
 
+    if not cuotas:
+        print("\nNo hay cuotas registradas para ese mes y año.")
+        cursor.close()
+        return
+
     print(f"\nCuotas que se actualizarán ({anio}-{mes}):")
     for c in cuotas:
-        print(f"ID pago: {c['id_pago']} | Usuario {c['id_usuario']} | Monto: {c['monto']}")
+        print(f"ID pago: {c['id_pago']} | Usuario {c['id_usuario']} | Monto actual: {c['monto']}")
 
-    # confirmar
+    # avisar si el monto es igual al monto existente
+    montos_iguales = all(float(c["monto"]) == nuevo_monto for c in cuotas)
+    if montos_iguales:
+        print("\nEl nuevo monto es igual al monto existente en todas las cuotas. No se realizaron cambios.")
+        cursor.close()
+        return
+
+    # confirmacion
     confirmar = input(
-        f"¿Aplicar nuevo monto ({nuevo_monto})? (s/n): "
+        f"¿Aplicar nuevo monto ({nuevo_monto}) a TODAS las cuotas del mes {mes}/{anio}? (s/n): "
     ).strip().lower()
 
     if confirmar != "s":
@@ -743,18 +809,29 @@ def modificar_cuota_mes(conexion):
         cursor.close()
         return
 
-    # update
-    cursor_update = conexion.cursor()
-    cursor_update.execute(
-        "UPDATE pagos SET monto = %s WHERE anio = %s AND mes = %s;",
-        (nuevo_monto, anio, mes)
-    )
-    conexion.commit()
+    #  transaccion
+    try:
+        conexion.start_transaction()
 
-    print(f"\nCuotas actualizadas correctamente. Filas afectadas: {cursor_update.rowcount}")
+        cursor_update = conexion.cursor()
+        cursor_update.execute(
+            "UPDATE pagos SET monto = %s WHERE anio = %s AND mes = %s;",
+            (nuevo_monto, anio, mes)
+        )
 
-    cursor_update.close()
-    cursor.close()
+        conexion.commit()
+
+        print(f"\n✔ Cuotas actualizadas correctamente. Filas afectadas: {cursor_update.rowcount}")
+
+    except Exception as e:
+        conexion.rollback()
+        print("\n❌ ERROR: No se pudieron actualizar las cuotas. Cambios revertidos.")
+        print("Detalle:", e)
+
+    finally:
+        cursor_update.close()
+        cursor.close()
+
 
 
 
