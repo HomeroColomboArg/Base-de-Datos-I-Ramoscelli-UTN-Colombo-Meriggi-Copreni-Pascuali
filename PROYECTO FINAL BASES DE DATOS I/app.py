@@ -251,13 +251,14 @@ def registrar_libro(conexion):
 def ver_libros(conexion):
     cursor = conexion.cursor(dictionary=True)
 
-    print("\n=== LISTA DE LIBROS ===")
 
     consulta = """
-        SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
-        FROM libros
-        ORDER BY id_libro;
-    """
+    SELECT id_libro, titulo, autor, anio_publicacion, editorial, categoria
+    FROM libros
+    WHERE activo = 1
+    ORDER BY id_libro;
+"""
+
 
     cursor.execute(consulta)
     libros = cursor.fetchall()
@@ -323,8 +324,8 @@ def actualizar_libro(conexion):
 def eliminar_libro(conexion):
     cursor = conexion.cursor(dictionary=True)
 
-    print("\n=== ELIMINAR LIBRO ===")
-    id_libro = input("Ingrese el ID: ").strip()
+    print("\n=== ELIMINAR (BAJA LÓGICA) ===")
+    id_libro = input("Ingrese el ID del libro: ").strip()
 
     cursor.execute("SELECT * FROM libros WHERE id_libro = %s;", (id_libro,))
     libro = cursor.fetchone()
@@ -334,7 +335,9 @@ def eliminar_libro(conexion):
         cursor.close()
         return
 
-    confirmar = input(f"¿Eliminar el libro '{libro['titulo']}'? (s/n): ").lower().strip()
+    confirmar = input(
+        f"¿Dar de baja el libro '{libro['titulo']}'? (s/n): "
+    ).strip().lower()
 
     if confirmar != "s":
         print("Operación cancelada.")
@@ -342,13 +345,21 @@ def eliminar_libro(conexion):
         return
 
     cursor2 = conexion.cursor()
-    cursor2.execute("DELETE FROM libros WHERE id_libro = %s;", (id_libro,))
+
+    
+    
+
+    cursor2.execute(
+        "UPDATE libros SET activo = 0 WHERE id_libro = %s;",
+        (id_libro,)
+    )
     conexion.commit()
 
-    print("\nLibro eliminado correctamente.")
+    print("\nLibro dado de baja correctamente.")
 
     cursor.close()
     cursor2.close()
+
 
 
 
