@@ -352,8 +352,7 @@ def eliminar_libro(conexion):
 
 
 
- # 3) manejo de prestamos con transacciones
-
+# 3) manejo de prestamos con transaccion
 
 def manejo_prestamos(conexion):
     cursor = conexion.cursor(dictionary=True)
@@ -399,7 +398,7 @@ def manejo_prestamos(conexion):
     print(f"- Fecha vencimiento: {prestamo['fecha_vencimiento']}")
     print(f"- Estado actual: {prestamo['estado']}")
 
-    # calcular dias de atraso 
+    # calculo de dias de atraso
     hoy = datetime.now().date()
     fecha_venc = prestamo["fecha_vencimiento"]
 
@@ -429,8 +428,11 @@ def manejo_prestamos(conexion):
 
     print(f"Multa calculada: ${multa:.2f}")
 
-    # transaccion 
+    # transaccion
     try:
+        
+        conexion.rollback()
+
         print("\nIniciando transacción...")
         conexion.start_transaction()
 
@@ -447,7 +449,6 @@ def manejo_prestamos(conexion):
             cursor.execute(update, (prestamo["id_prestamo"],))
             print("✔ El préstamo fue marcado como DEVUELTO.")
 
-        # confirmar operacion
         confirmar = input("¿Confirmar y guardar los cambios? (s/n): ").strip().lower()
 
         if confirmar == "s":
@@ -459,10 +460,11 @@ def manejo_prestamos(conexion):
 
     except Exception as e:
         conexion.rollback()
-        print("\n❌ ERROR: La transacción falló. Cambios revertidos.")
+        print("\n ERROR: La transacción falló. Cambios revertidos.")
         print("Detalle:", e)
 
     cursor.close()
+
 
 
 
