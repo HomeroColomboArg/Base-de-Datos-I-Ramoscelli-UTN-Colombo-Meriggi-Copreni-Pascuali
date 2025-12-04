@@ -87,7 +87,7 @@ CREATE TABLE prestamos (
         REFERENCES libros (id_libro)
         ON UPDATE CASCADE
         ON DELETE RESTRICT
-) ENGINE = InnoDB;
+);
 
 -- INSERTS INICIALES
 
