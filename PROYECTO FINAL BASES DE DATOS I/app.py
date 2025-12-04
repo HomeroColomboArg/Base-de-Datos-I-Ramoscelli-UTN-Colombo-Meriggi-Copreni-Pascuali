@@ -1,6 +1,6 @@
 from conexion import conectar
 from datetime import date, datetime
-
+import os
 
 #   1) gestion de usuarios
 
@@ -835,11 +835,22 @@ def modificar_cuota_mes(conexion):
 
 
 
-#          MENÚ
+import os
+from conexion import conectar
+from datetime import datetime
+
+
+
+def limpiar():
+    os.system("cls" if os.name == "nt" else "clear")
+
+
+#  MENÚ PRINCIPAL 
 
 def mostrar_menu(conexion):
 
     while True:
+        limpiar()
         print("""
 ========= MENÚ BIBLIOTECA =========
 1. Gestión de usuarios        
@@ -852,42 +863,45 @@ def mostrar_menu(conexion):
 """)
 
         opcion = input("Seleccione una opción: ").strip()
-        if opcion == "1":
+
+        try:
+            if opcion == "1":
                 submenu_usuarios(conexion)
-        elif opcion == "2":
+
+            elif opcion == "2":
                 submenu_libros(conexion)
-        elif opcion == "3":
+
+            elif opcion == "3":
                 manejo_prestamos(conexion)
-        elif opcion == "4":
+
+            elif opcion == "4":
                 submenu_busqueda(conexion)
-        elif opcion == "5":
+
+            elif opcion == "5":
                 reporte_morosos(conexion)
-        elif opcion == "6":
+
+            elif opcion == "6":
                 modificar_cuota_mes(conexion)
-        elif opcion == "0":
-                print("Saliendo del sistema...")
+
+            elif opcion == "0":
+                print("\nSaliendo del sistema...")
                 break
-        else:
-                print("Opción no implementada o inválida.")
 
-
-      
-        while True:
-            volver = input("\n¿Desea volver al menú principal? (s/n): ").strip().lower()
-            if volver == "s":
-                break       # vuelve al menu
-            elif volver == "n":
-                print("Saliendo del sistema...")
-                return      # termina toda la funcion
             else:
-                print("Opción inválida. Responda 's' o 'n'.")
+                print("Opción inválida.")
+                input("\nPresione ENTER para continuar...")
+
+        except Exception as e:
+            print("\n❌ ERROR inesperado en el menú.")
+            print("Detalle:", e)
+            input("\nPresione ENTER para continuar...")
 
 
-
-#   MAIN
+#  MAIN 
 
 def main():
     conexion = conectar()
+
     if not conexion:
         print("No se pudo conectar a la base de datos.")
         return
@@ -896,7 +910,9 @@ def main():
         mostrar_menu(conexion)
     finally:
         conexion.close()
-        print("Conexión cerrada correctamente.")
+        print("\nConexión cerrada correctamente.\n")
+
 
 if __name__ == "__main__":
     main()
+
