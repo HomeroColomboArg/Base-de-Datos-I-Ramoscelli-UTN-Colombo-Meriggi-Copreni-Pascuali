@@ -3,12 +3,14 @@ import mysql.connector
 def conectar():
     try:
         mydb = mysql.connector.connect(
-            host="127.0.0.1",                  # Host donde está la base de datos
-            port='3307',                       # Puerto de conexión
-            user="root",                      # Usuario de MySQL
+            host="127.0.0.1",            # Host donde está la base de datos
+            port="3307",                # Puerto de conexión
+            user="root",                # Usuario de MySQL
             password="contraseña",      # Contraseña de ese usuario
-            database="biblioteca_db"  # Nombre de la base de datos
+            database="biblioteca_db",   # Nombre de la base de datos
+            autocommit=True             # Habilitar autocommit
         )
+
         if mydb.is_connected():
             print("Conexión exitosa a la base de datos")
             return mydb
@@ -18,5 +20,3 @@ def conectar():
         return None
 
     return None
-
-
