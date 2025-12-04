@@ -1,8 +1,8 @@
-from PROYECTO_SQL import conectar
+from conexion import conectar
 from datetime import date, datetime
 
 
-#   1) GESTIÓN DE USUARIOS 
+#   1) gestion de usuarios
 
 
 def submenu_usuarios(conexion):
@@ -93,6 +93,7 @@ def actualizar_usuario(conexion):
     print("\n=== ACTUALIZAR USUARIO ===")
     id_usuario = input("Ingrese el ID del usuario a actualizar: ").strip()
 
+    # buscar usuario
     cursor.execute("SELECT * FROM usuarios WHERE id_usuario = %s;", (id_usuario,))
     usuario = cursor.fetchone()
 
@@ -101,27 +102,63 @@ def actualizar_usuario(conexion):
         cursor.close()
         return
 
-    print(f"Actualizando a: {usuario['nombre']} {usuario['apellido']}")
+    print(f"\nActualizando a: {usuario['nombre']} {usuario['apellido']}")
+
+
+  
+ 
 
     nuevo_nombre = input(f"Nuevo nombre ({usuario['nombre']}): ").strip() or usuario['nombre']
     nuevo_apellido = input(f"Nuevo apellido ({usuario['apellido']}): ").strip() or usuario['apellido']
     nuevo_email = input(f"Nuevo email ({usuario['email']}): ").strip() or usuario['email']
     nuevo_tel = input(f"Nuevo teléfono ({usuario['telefono']}): ").strip() or usuario['telefono']
 
+    
+     
+
+    nuevo_dni = input(f"Nuevo DNI ({usuario['dni']}): ").strip()
+
+    if nuevo_dni == "":
+        nuevo_dni = usuario['dni']
+    else:
+        # verificar que no exista en otro usuario
+        cursor.execute(
+            "SELECT id_usuario FROM usuarios WHERE dni = %s AND id_usuario != %s;",
+            (nuevo_dni, id_usuario)
+        )
+        dni_existente = cursor.fetchone()
+
+        if dni_existente:
+            print("\n Error: ese DNI ya está registrado en otro usuario.")
+            cursor.close()
+            return
+
+
+    
+    
+
     consulta = """
         UPDATE usuarios
-        SET nombre = %s, apellido = %s, email = %s, telefono = %s
+        SET nombre = %s,
+            apellido = %s,
+            email = %s,
+            telefono = %s,
+            dni = %s
         WHERE id_usuario = %s;
     """
 
     cursor2 = conexion.cursor()
-    cursor2.execute(consulta, (nuevo_nombre, nuevo_apellido, nuevo_email, nuevo_tel, id_usuario))
+    cursor2.execute(
+        consulta,
+        (nuevo_nombre, nuevo_apellido, nuevo_email, nuevo_tel, nuevo_dni, id_usuario)
+    )
     conexion.commit()
 
     print("\nUsuario actualizado correctamente.")
 
-    cursor.close()
     cursor2.close()
+    cursor.close()
+
 
 
 def eliminar_usuario(conexion):
@@ -155,7 +192,7 @@ def eliminar_usuario(conexion):
     cursor2.close()
 
 
-#   2) GESTIÓN DE LIBROS 
+#   2) gestion de libros 
 
 
 def submenu_libros(conexion):
@@ -315,7 +352,7 @@ def eliminar_libro(conexion):
 
 
 
- # 3) 3: MANEJO DE PRÉSTAMOS (CON TRANSACCIÓN)
+ # 3) manejo de prestamos con transacciones
 
 
 def manejo_prestamos(conexion):
@@ -331,13 +368,14 @@ def manejo_prestamos(conexion):
         cursor.close()
         return
 
-    # Verifica existencia del préstamo
+    
     consulta = """
         SELECT 
             pr.id_prestamo,
             pr.fecha_prestamo,
+            pr.fecha_vencimiento,
             pr.fecha_devolucion,
-            pr.devuelto,
+            pr.estado,
             u.nombre AS usuario,
             l.titulo AS libro
         FROM prestamos pr
@@ -345,6 +383,7 @@ def manejo_prestamos(conexion):
         JOIN libros l ON pr.id_libro = l.id_libro
         WHERE pr.id_usuario = %s AND pr.id_libro = %s;
     """
+
     cursor.execute(consulta, (id_usuario, id_libro))
     prestamo = cursor.fetchone()
 
@@ -357,21 +396,20 @@ def manejo_prestamos(conexion):
     print(f"- Usuario: {prestamo['usuario']}")
     print(f"- Libro: {prestamo['libro']}")
     print(f"- Fecha préstamo: {prestamo['fecha_prestamo']}")
-    print(f"- Fecha devolución pactada: {prestamo['fecha_devolucion']}")
+    print(f"- Fecha vencimiento: {prestamo['fecha_vencimiento']}")
+    print(f"- Estado actual: {prestamo['estado']}")
 
-    # Calcular dias de atraso
-    from datetime import datetime
-
+    # calcular dias de atraso 
     hoy = datetime.now().date()
-    fecha_devolucion = prestamo["fecha_devolucion"]
+    fecha_venc = prestamo["fecha_vencimiento"]
 
-    dias_atraso = (hoy - fecha_devolucion).days
+    dias_atraso = (hoy - fecha_venc).days
     if dias_atraso < 0:
         dias_atraso = 0
 
     print(f"\nDías de atraso: {dias_atraso}")
 
-    # Obtener monto de la cuota mensual del usuario
+    # ultima cuota del usuario
     cursor.execute("""
         SELECT monto 
         FROM pagos 
@@ -391,44 +429,44 @@ def manejo_prestamos(conexion):
 
     print(f"Multa calculada: ${multa:.2f}")
 
-   
-    #     parte con transaccion
-   
+    # transaccion 
     try:
         print("\nIniciando transacción...")
         conexion.start_transaction()
 
-        # Ejemplo: marcar el préstamo como devuelto (si corresponde)
         marcar = input("¿Desea marcar este préstamo como devuelto? (s/n): ").strip().lower()
+
         if marcar == "s":
             update = """
                 UPDATE prestamos
-                SET devuelto = 1
+                SET 
+                    estado = 'DEVUELTO',
+                    fecha_devolucion = CURDATE()
                 WHERE id_prestamo = %s;
             """
             cursor.execute(update, (prestamo["id_prestamo"],))
-            print("El préstamo fue marcado como devuelto.")
+            print("✔ El préstamo fue marcado como DEVUELTO.")
 
-        # Registrar multa en tabla opcional (si existiera, si no solo demostramos transacción)
-        registrar = input("¿Desea confirmar y guardar los cambios? (s/n): ").strip().lower()
+        # confirmar operacion
+        confirmar = input("¿Confirmar y guardar los cambios? (s/n): ").strip().lower()
 
-        if registrar == "s":
+        if confirmar == "s":
             conexion.commit()
-            print("\nTransacción completada con éxito. Cambios guardados.")
+            print("\n✔ Transacción completada con éxito. Cambios guardados.")
         else:
             conexion.rollback()
-            print("\nTransacción cancelada. No se guardaron cambios.")
+            print("\n✖ Transacción cancelada. No se guardaron cambios.")
 
     except Exception as e:
         conexion.rollback()
-        print("\nERROR: La transacción falló. Se revirtieron los cambios.")
+        print("\n❌ ERROR: La transacción falló. Cambios revertidos.")
         print("Detalle:", e)
 
     cursor.close()
 
 
 
-#   4) BÚSQUEDA Y FILTRADO
+#   4) busqueda y filtrado
 
 
 def submenu_busqueda(conexion):
@@ -564,7 +602,7 @@ def buscar_usuarios_por_texto(conexion):
             )
 
 
-#  5) REPORTE DE MOROSOS
+#  5) reporte de morosos
 
 def reporte_morosos(conexion):
     cursor = conexion.cursor(dictionary=True)
@@ -609,12 +647,12 @@ def reporte_morosos(conexion):
 
 
 
-#  6) MODIFICACIÓN DE LA CUOTA
+#  6) modificacion de la cuota
 
 def modificar_cuota_mes(conexion):
     cursor = conexion.cursor(dictionary=True)
 
-    # 1) Años disponibles
+    #  años disponibles
     cursor.execute("SELECT DISTINCT anio FROM pagos ORDER BY anio;")
     filas_anios = cursor.fetchall()
 
@@ -629,7 +667,7 @@ def modificar_cuota_mes(conexion):
     for anio in anios_disponibles:
         print(f"- {anio}")
 
-    # Selección de año válido
+    # seleccion de año valido
     while True:
         try:
             anio = int(input("Ingrese el año (YYYY): ").strip())
@@ -639,7 +677,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número entero válido.")
 
-    # 2) Meses disponibles
+    # meses disponibles
     cursor.execute(
         "SELECT DISTINCT mes FROM pagos WHERE anio = %s ORDER BY mes;",
         (anio,)
@@ -651,7 +689,7 @@ def modificar_cuota_mes(conexion):
     for mes in meses_disponibles:
         print(f"- {mes}")
 
-    # Selección de mes válido
+    # seleccion de mes valido
     while True:
         try:
             mes = int(input("Ingrese el mes (1-12): ").strip())
@@ -661,7 +699,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número entero válido.")
 
-    # 3) Nuevo monto
+    # nuevo monto
     while True:
         try:
             nuevo_monto = float(input("Ingrese el nuevo monto: ").strip())
@@ -671,7 +709,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número válido.")
 
-    # Preview
+    
     cursor.execute(
         "SELECT id_pago, id_usuario, monto FROM pagos WHERE anio = %s AND mes = %s;",
         (anio, mes)
@@ -682,7 +720,7 @@ def modificar_cuota_mes(conexion):
     for c in cuotas:
         print(f"ID pago: {c['id_pago']} | Usuario {c['id_usuario']} | Monto: {c['monto']}")
 
-    # Confirmación
+    # confirmar
     confirmar = input(
         f"¿Aplicar nuevo monto ({nuevo_monto})? (s/n): "
     ).strip().lower()
@@ -692,7 +730,7 @@ def modificar_cuota_mes(conexion):
         cursor.close()
         return
 
-    # UPDATE
+    # update
     cursor_update = conexion.cursor()
     cursor_update.execute(
         "UPDATE pagos SET monto = %s WHERE anio = %s AND mes = %s;",
@@ -729,7 +767,7 @@ def mostrar_menu(conexion):
         elif opcion == "2":
                 submenu_libros(conexion)
         elif opcion == "3":
-                submenu_prestamos(conexion)
+                manejo_prestamos(conexion)
         elif opcion == "4":
                 submenu_busqueda(conexion)
         elif opcion == "5":
@@ -747,10 +785,10 @@ def mostrar_menu(conexion):
         while True:
             volver = input("\n¿Desea volver al menú principal? (s/n): ").strip().lower()
             if volver == "s":
-                break       # vuelve al menú
+                break       # vuelve al menu
             elif volver == "n":
                 print("Saliendo del sistema...")
-                return      # termina toda la función, se cierra conexión en main()
+                return      # termina toda la funcion
             else:
                 print("Opción inválida. Responda 's' o 'n'.")
 
@@ -772,4 +810,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
