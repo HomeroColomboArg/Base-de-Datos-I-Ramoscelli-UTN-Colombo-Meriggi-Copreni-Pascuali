@@ -314,125 +314,117 @@ def eliminar_libro(conexion):
     cursor2.close()
 
 
-#   3) MANEJO DE PRÉSTAMOS  (cálculo de multa)
+
+ # 3) 3: MANEJO DE PRÉSTAMOS (CON TRANSACCIÓN)
 
 
-def submenu_prestamos(conexion):
-        while True:
-            print("""
-     ----- MANEJO DE PRÉSTAMOS -----
-     1. Calcular multa por retraso para un socio
-     0. Volver al menú principal
-     """)
-            opcion = input("Seleccione una opción: ").strip()
-
-            if opcion == "1":
-                calcular_multa_socio(conexion)
-            elif opcion == "0":
-                return
-            else:
-                print("Opción inválida.")
-
-
-def calcular_multa_socio(conexion):
+def manejo_prestamos(conexion):
     cursor = conexion.cursor(dictionary=True)
 
-    print("\n=== CÁLCULO DE MULTA POR RETRASO ===")
-    id_usuario = input("Ingrese el ID del usuario: ").strip()
+    print("\n=== CÁLCULO DE MULTA POR ATRASO ===")
 
-    
-    cursor.execute("SELECT * FROM usuarios WHERE id_usuario = %s;", (id_usuario,))
-    usuario = cursor.fetchone()
-
-    if not usuario:
-        print("No existe un usuario con ese ID.")
+    try:
+        id_usuario = int(input("Ingrese el ID del usuario: ").strip())
+        id_libro = int(input("Ingrese el ID del libro: ").strip())
+    except ValueError:
+        print("Error: debe ingresar números enteros.")
         cursor.close()
         return
 
-    
+    # Verifica existencia del préstamo
     consulta = """
         SELECT 
             pr.id_prestamo,
             pr.fecha_prestamo,
-            pr.fecha_vencimiento,
             pr.fecha_devolucion,
-            pr.estado,
-            pa.monto AS cuota_mensual
+            pr.devuelto,
+            u.nombre AS usuario,
+            l.titulo AS libro
         FROM prestamos pr
-        LEFT JOIN pagos pa
-            ON pa.id_usuario = pr.id_usuario
-           AND pa.anio = YEAR(pr.fecha_vencimiento)
-           AND pa.mes  = MONTH(pr.fecha_vencimiento)
-        WHERE pr.id_usuario = %s
-        ORDER BY pr.fecha_prestamo;
+        JOIN usuarios u ON pr.id_usuario = u.id_usuario
+        JOIN libros l ON pr.id_libro = l.id_libro
+        WHERE pr.id_usuario = %s AND pr.id_libro = %s;
     """
-    cursor.execute(consulta, (id_usuario,))
-    prestamos = cursor.fetchall()
-    cursor.close()
+    cursor.execute(consulta, (id_usuario, id_libro))
+    prestamo = cursor.fetchone()
 
-    if not prestamos:
-        print("\nEse usuario no tiene préstamos registrados.")
+    if not prestamo:
+        print("\nNo existe un préstamo registrado para ese usuario y libro.")
+        cursor.close()
         return
 
-    
-    texto_fecha = input(
-        "Ingrese la fecha actual para el cálculo (YYYY-MM-DD) o deje vacío para usar la fecha de hoy: "
-    ).strip()
+    print(f"\nPréstamo encontrado:")
+    print(f"- Usuario: {prestamo['usuario']}")
+    print(f"- Libro: {prestamo['libro']}")
+    print(f"- Fecha préstamo: {prestamo['fecha_prestamo']}")
+    print(f"- Fecha devolución pactada: {prestamo['fecha_devolucion']}")
 
-    if texto_fecha:
-        try:
-            fecha_hoy = datetime.strptime(texto_fecha, "%Y-%m-%d").date()
-        except ValueError:
-            print("Formato inválido, se usa la fecha de hoy del sistema.")
-            fecha_hoy = date.today()
-    else:
-        fecha_hoy = date.today()
+    # Calcular dias de atraso
+    from datetime import datetime
 
-    total_multa = 0  
+    hoy = datetime.now().date()
+    fecha_devolucion = prestamo["fecha_devolucion"]
 
-    print(f"\nPréstamos del usuario {usuario['nombre']} {usuario['apellido']}:\n")
+    dias_atraso = (hoy - fecha_devolucion).days
+    if dias_atraso < 0:
+        dias_atraso = 0
 
-    for p in prestamos:
-        fecha_venc = p["fecha_vencimiento"]
-        fecha_dev = p["fecha_devolucion"]
-        cuota = p["cuota_mensual"]
+    print(f"\nDías de atraso: {dias_atraso}")
 
-        
-        if fecha_dev is None:
-            fecha_dev_str = "Todavía no devolvió"
+    # Obtener monto de la cuota mensual del usuario
+    cursor.execute("""
+        SELECT monto 
+        FROM pagos 
+        WHERE id_usuario = %s 
+        ORDER BY anio DESC, mes DESC 
+        LIMIT 1;
+    """, (id_usuario,))
+    pago = cursor.fetchone()
+
+    if not pago:
+        print("\nNo se encontró cuota mensual para el usuario.")
+        cursor.close()
+        return
+
+    monto_cuota = float(pago["monto"])
+    multa = dias_atraso * (monto_cuota * 0.03)
+
+    print(f"Multa calculada: ${multa:.2f}")
+
+   
+    #     parte con transaccion
+   
+    try:
+        print("\nIniciando transacción...")
+        conexion.start_transaction()
+
+        # Ejemplo: marcar el préstamo como devuelto (si corresponde)
+        marcar = input("¿Desea marcar este préstamo como devuelto? (s/n): ").strip().lower()
+        if marcar == "s":
+            update = """
+                UPDATE prestamos
+                SET devuelto = 1
+                WHERE id_prestamo = %s;
+            """
+            cursor.execute(update, (prestamo["id_prestamo"],))
+            print("El préstamo fue marcado como devuelto.")
+
+        # Registrar multa en tabla opcional (si existiera, si no solo demostramos transacción)
+        registrar = input("¿Desea confirmar y guardar los cambios? (s/n): ").strip().lower()
+
+        if registrar == "s":
+            conexion.commit()
+            print("\nTransacción completada con éxito. Cambios guardados.")
         else:
-            fecha_dev_str = str(fecha_dev)
+            conexion.rollback()
+            print("\nTransacción cancelada. No se guardaron cambios.")
 
-        
-        if cuota is None:
-            dias_atraso = 0
-            multa = 0.0
-        else:
-            if fecha_dev is not None:
-                fecha_fin = fecha_dev
-            else:
-                fecha_fin = fecha_hoy
+    except Exception as e:
+        conexion.rollback()
+        print("\nERROR: La transacción falló. Se revirtieron los cambios.")
+        print("Detalle:", e)
 
-            if fecha_fin > fecha_venc:
-                dias_atraso = (fecha_fin - fecha_venc).days
-                multa = dias_atraso * 0.03 * float(cuota)
-            else:
-                dias_atraso = 0
-                multa = 0.0
-
-        total_multa += multa
-
-        print(
-            f"Préstamo ID: {p['id_prestamo']} | "
-            f"Estado: {p['estado']} | "
-            f"Vence: {fecha_venc} | "
-            f"Devolución: {fecha_dev_str} | "
-            f"Días atraso: {dias_atraso} | "
-            f"Cuota: {cuota if cuota is not None else 'N/A'} | "
-            f"Multa: ${multa:.2f}"
-        )
-
-    print(f"\n>>> Multa TOTAL para el usuario {usuario['nombre']} {usuario['apellido']}: ${total_multa:.2f}")
+    cursor.close()
 
 
 
@@ -780,3 +772,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
