@@ -4,7 +4,7 @@ def conectar():
     try:
         mydb = mysql.connector.connect(
             host="127.0.0.1",            # Host donde está la base de datos
-            port="3307",                # Puerto de conexión
+            port="3306",                # Puerto de conexión
             user="root",                # Usuario de MySQL
             password="contraseña",      # Contraseña de ese usuario
             database="biblioteca_db",   # Nombre de la base de datos
@@ -20,3 +20,4 @@ def conectar():
         return None
 
     return None
+
