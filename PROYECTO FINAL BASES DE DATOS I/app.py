@@ -375,7 +375,7 @@ def eliminar_libro(conexion):
 
 
 
-
+#3) manejo de prestamos
 def manejo_prestamos(conexion):
     cursor = conexion.cursor(dictionary=True)
 
