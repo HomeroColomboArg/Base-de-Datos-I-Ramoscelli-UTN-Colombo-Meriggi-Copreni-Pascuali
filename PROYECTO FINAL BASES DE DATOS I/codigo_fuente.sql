@@ -90,16 +90,17 @@ CREATE TABLE prestamos (
 -- INSERTS INICIALES
 
 INSERT INTO usuarios (nombre, apellido, dni, email, telefono, fecha_alta, activo) VALUES
-('Juan',   'Pérez',      '30111222', 'juan.perez@example.com',   '291-4000001', '2024-01-15', 1),
-('María',  'Gómez',      '30222333', 'maria.gomez@example.com',  '291-4000002', '2024-02-10', 1),
-('Lucas',  'Fernández',  '30333444', 'lucas.fernandez@example.com','291-4000003','2024-03-05',1),
-('Ana',    'Martínez',   '30444555', 'ana.martinez@example.com', '291-4000004', '2024-04-20', 1),
-('Sofía',  'López',      '30555666', 'sofia.lopez@example.com',  '291-4000005', '2024-05-12', 1),
-('Diego',  'Rodríguez',  '30666777', 'diego.rodriguez@example.com','291-4000006','2024-06-01',1),
-('Carla',  'Sosa',       '30777888', 'carla.sosa@example.com',   '291-4000007', '2024-07-18', 1),
-('Martín', 'Ruiz',       '30888999', 'martin.ruiz@example.com',  '291-4000008', '2024-08-22', 1),
-('Laura',  'Castro',     '30999000', 'laura.castro@example.com', '291-4000009', '2024-09-03', 1),
-('Pablo',  'Domínguez',  '31100111', 'pablo.dominguez@example.com','291-4000010','2024-10-11',1);
+('Juan',   'Pérez',      '30111222', 'juan.perez@example.com',     '291-4000001', '2025-03-10', 1),
+('María',  'Gómez',      '30222333', 'maria.gomez@example.com',    '291-4000002', '2025-03-28', 1),
+('Lucas',  'Fernández',  '30333444', 'lucas.fernandez@example.com','291-4000003', '2025-04-05', 1),
+('Ana',    'Martínez',   '30444555', 'ana.martinez@example.com',   '291-4000004', '2025-04-22', 1),
+('Sofía',  'López',      '30555666', 'sofia.lopez@example.com',    '291-4000005', '2025-05-03', 1),
+('Diego',  'Rodríguez',  '30666777', 'diego.rodriguez@example.com','291-4000006', '2025-05-18', 1),
+('Carla',  'Sosa',       '30777888', 'carla.sosa@example.com',     '291-4000007', '2025-05-30', 1),
+('Martín', 'Ruiz',       '30888999', 'martin.ruiz@example.com',    '291-4000008', '2025-06-12', 1),
+('Laura',  'Castro',     '30999000', 'laura.castro@example.com',   '291-4000009', '2025-06-20', 1),
+('Pablo',  'Domínguez',  '31100111', 'pablo.dominguez@example.com','291-4000010', '2025-06-28', 1);
+
 
 
 INSERT INTO libros (titulo, autor, anio_publicacion, isbn, editorial, categoria) VALUES
