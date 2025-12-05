@@ -9,7 +9,6 @@ DROP TABLE IF EXISTS libros;
 DROP TABLE IF EXISTS usuarios;
 
 -- TABLA USUARIOS
--- Socios de la biblioteca
 
 CREATE TABLE usuarios (
     id_usuario      INT UNSIGNED AUTO_INCREMENT,
@@ -26,7 +25,6 @@ CREATE TABLE usuarios (
 );
 
 -- TABLA LIBROS
--- Información de los libros de la biblioteca
 
 CREATE TABLE libros (
     id_libro         INT UNSIGNED AUTO_INCREMENT,
@@ -42,12 +40,11 @@ CREATE TABLE libros (
 );
 
 
--- Índice para acelerar búsquedas por título/autor
+-- indice para acelerar búsquedas por título/autor
 CREATE INDEX idx_libros_titulo_autor
     ON libros (titulo, autor);
 
 -- TABLA PAGOS
--- Cuotas mensuales de los usuarios
 CREATE TABLE pagos (
     id_pago             INT UNSIGNED AUTO_INCREMENT,
     id_usuario          INT UNSIGNED      NOT NULL,
@@ -68,7 +65,6 @@ CREATE TABLE pagos (
 
 
 -- TABLA PRESTAMOS
--- Préstamos de libros a usuarios
 CREATE TABLE prestamos (
     id_prestamo        INT UNSIGNED AUTO_INCREMENT,
     id_usuario         INT UNSIGNED      NOT NULL,
