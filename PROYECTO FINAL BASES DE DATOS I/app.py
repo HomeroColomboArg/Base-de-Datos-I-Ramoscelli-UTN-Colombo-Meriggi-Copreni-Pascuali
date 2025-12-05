@@ -104,17 +104,25 @@ def actualizar_usuario(conexion):
 
     print(f"\nActualizando a: {usuario['nombre']} {usuario['apellido']}")
 
+    #   si esta inactivo, preguntar si quiere activarlo
+    if usuario["activo"] == 0:
+        print("\n⚠️ Este usuario está INACTIVO (dado de baja).")
+        react = input("¿Desea activarlo nuevamente? (s/n): ").strip().lower()
+        if react == "s":
+            usuario["activo"] = 1   # lo marcamos para guardar el cambio luego
+            reactivar = True
+        else:
+            print("No se puede actualizar un usuario inactivo.")
+            cursor.close()
+            return
+    else:
+        reactivar = False
 
-  
- 
-
+    # pedir nuevos datos
     nuevo_nombre = input(f"Nuevo nombre ({usuario['nombre']}): ").strip() or usuario['nombre']
     nuevo_apellido = input(f"Nuevo apellido ({usuario['apellido']}): ").strip() or usuario['apellido']
     nuevo_email = input(f"Nuevo email ({usuario['email']}): ").strip() or usuario['email']
     nuevo_tel = input(f"Nuevo teléfono ({usuario['telefono']}): ").strip() or usuario['telefono']
-
-    
-     
 
     nuevo_dni = input(f"Nuevo DNI ({usuario['dni']}): ").strip()
 
@@ -133,19 +141,28 @@ def actualizar_usuario(conexion):
             cursor.close()
             return
 
-
-    
-    
-
-    consulta = """
-        UPDATE usuarios
-        SET nombre = %s,
-            apellido = %s,
-            email = %s,
-            telefono = %s,
-            dni = %s
-        WHERE id_usuario = %s;
-    """
+    # update con reactivacion opcional
+    if reactivar:
+        consulta = """
+            UPDATE usuarios
+            SET nombre = %s,
+                apellido = %s,
+                email = %s,
+                telefono = %s,
+                dni = %s,
+                activo = 1
+            WHERE id_usuario = %s;
+        """
+    else:
+        consulta = """
+            UPDATE usuarios
+            SET nombre = %s,
+                apellido = %s,
+                email = %s,
+                telefono = %s,
+                dni = %s
+            WHERE id_usuario = %s;
+        """
 
     cursor2 = conexion.cursor()
     cursor2.execute(
@@ -158,7 +175,6 @@ def actualizar_usuario(conexion):
 
     cursor2.close()
     cursor.close()
-
 
 
 def eliminar_usuario(conexion):
@@ -360,25 +376,22 @@ def eliminar_libro(conexion):
 
 
 
-# 3) manejo de prestamos con transaccion
-
 def manejo_prestamos(conexion):
     cursor = conexion.cursor(dictionary=True)
 
     print("\n=== CÁLCULO DE MULTA POR ATRASO ===")
 
-    
+    # pedir ids
     try:
         id_usuario = int(input("Ingrese el ID del usuario: ").strip())
         id_libro = int(input("Ingrese el ID del libro: ").strip())
     except ValueError:
         print("Error: debe ingresar números enteros.")
+        input("\nPresione ENTER para continuar...")
         cursor.close()
         return
 
-    
-    # obtener prestamo vigente 
-    
+    #buscar prestamo
     consulta = """
         SELECT 
             pr.id_prestamo,
@@ -402,9 +415,11 @@ def manejo_prestamos(conexion):
 
     if not prestamo:
         print("\nNo existe un préstamo registrado para ese usuario y libro.")
+        input("\nPresione ENTER para continuar...")
         cursor.close()
         return
 
+    # mostrar info del rpestamo
     print(f"\nPréstamo encontrado:")
     print(f"- Usuario: {prestamo['usuario']}")
     print(f"- Libro: {prestamo['libro']}")
@@ -412,29 +427,22 @@ def manejo_prestamos(conexion):
     print(f"- Fecha vencimiento: {prestamo['fecha_vencimiento']}")
     print(f"- Estado actual: {prestamo['estado']}")
 
-    
-    # si ya estaba devuelto , no calcular multa ni permitir modificar
-    
+    # si ya fue devuelto, no se permite nada
     if prestamo["estado"] == "DEVUELTO":
         print("\nEste préstamo ya fue devuelto. No se puede modificar ni calcular multa.")
+        input("\nPresione ENTER para continuar...")
         cursor.close()
         return
 
-    
-    # calcular dias de atraso
- 
+    # calcular atraso
     hoy = datetime.now().date()
-    fecha_venc = prestamo["fecha_vencimiento"]
-
-    dias_atraso = (hoy - fecha_venc).days
+    dias_atraso = (hoy - prestamo["fecha_vencimiento"]).days
     if dias_atraso < 0:
         dias_atraso = 0
 
     print(f"\nDías de atraso: {dias_atraso}")
 
-    
-    # traer última cuota del usuario
-  
+    # obtener cuota
     cursor.execute("""
         SELECT monto 
         FROM pagos 
@@ -447,6 +455,7 @@ def manejo_prestamos(conexion):
 
     if not pago:
         print("\nNo se encontró cuota mensual para el usuario.")
+        input("\nPresione ENTER para continuar...")
         cursor.close()
         return
 
@@ -455,36 +464,32 @@ def manejo_prestamos(conexion):
 
     print(f"Multa calculada: ${multa:.2f}")
 
-   
-    # transaccion
-    
+    # iniciar transaccion
     try:
         print("\nIniciando transacción...")
 
-        # iniciar transaccion limpia
+        conexion.rollback()         # limpiar transaccion anterior
         conexion.start_transaction()
 
-        marcar = input("¿Desea marcar este préstamo como devuelto? (s/n): ").strip().lower()
+        marcar = input("¿Desea marcar este préstamo como DEVUELTO? (s/n): ").strip().lower()
 
         if marcar == "s":
             cursor2 = conexion.cursor()
             update = """
                 UPDATE prestamos
-                SET 
-                    estado = 'DEVUELTO',
+                SET estado = 'DEVUELTO',
                     fecha_devolucion = CURDATE()
                 WHERE id_prestamo = %s;
             """
             cursor2.execute(update, (prestamo["id_prestamo"],))
             cursor2.close()
-            print("✔ El préstamo fue marcado como DEVUELTO.")
+            print("\n✔ El préstamo fue marcado como DEVUELTO.")
 
-        # Confirmar
         confirmar = input("¿Confirmar y guardar los cambios? (s/n): ").strip().lower()
 
         if confirmar == "s":
             conexion.commit()
-            print("\n✔ Transacción completada con éxito. Cambios guardados.")
+            print("\n✔ Transacción completada con éxito.")
         else:
             conexion.rollback()
             print("\n✖ Transacción cancelada. No se guardaron cambios.")
@@ -494,13 +499,15 @@ def manejo_prestamos(conexion):
         print("\n❌ ERROR: La transacción falló. Cambios revertidos.")
         print("Detalle:", e)
 
+    input("\nPresione ENTER para continuar...")
     cursor.close()
 
 
 
 
 
-#   busqueda y fiiltrado
+
+#  4) busqueda y fiiltrado
 
 def submenu_busqueda(conexion):
     while True:
@@ -526,7 +533,7 @@ def submenu_busqueda(conexion):
 
 
 
-# 1) buscar libros por texto
+#  buscar libros por texto
 
 
 def buscar_libros_por_texto(conexion):
@@ -658,8 +665,6 @@ def buscar_usuarios_por_texto(conexion):
 
 
 
-# 5) reporte de morosos
-
 def reporte_morosos(conexion):
     cursor = conexion.cursor(dictionary=True)
 
@@ -681,15 +686,15 @@ def reporte_morosos(conexion):
     cursor.execute(consulta)
     resultados = cursor.fetchall()
 
-    # Si no hay morosos
+    print("\n=== REPORTE DE MOROSOS ===\n")
+
+    # si no hay morosos
     if not resultados:
-        print("\n=== REPORTE DE MOROSOS ===")
         print("No hay usuarios morosos (todos están al día).")
+        input("\nPresione ENTER para continuar...")
         cursor.close()
         return
 
-    print("\n=== REPORTE DE MOROSOS ===\n")
-    
     total_meses = 0
     total_morosos = len(resultados)
 
@@ -709,7 +714,9 @@ def reporte_morosos(conexion):
     print(f"Promedio general         : {promedio:.2f} meses")
     print("--------------------------------------------")
 
+    input("\nPresione ENTER para continuar...")
     cursor.close()
+
 
 
 
@@ -726,6 +733,7 @@ def modificar_cuota_mes(conexion):
     if not filas_anios:
         print("\nNo hay cuotas cargadas en la base de datos.")
         cursor.close()
+        input("\nPresione ENTER para continuar...")
         return
 
     anios_disponibles = [fila["anio"] for fila in filas_anios]
@@ -744,7 +752,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número entero válido.")
 
-    # obtener meses disponibles para ese año
+    # obtener meses disponibles
     cursor.execute(
         "SELECT DISTINCT mes FROM pagos WHERE anio = %s ORDER BY mes;",
         (anio,)
@@ -756,7 +764,7 @@ def modificar_cuota_mes(conexion):
     for mes in meses_disponibles:
         print(f"- {mes}")
 
-    # seleccion del mnes valido
+    # seleccion del mes valido
     while True:
         try:
             mes = int(input("Ingrese el mes (1-12): ").strip())
@@ -766,7 +774,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número entero válido.")
 
-    #  ingresar nuevo monto
+    # ingresar nuevo monto
     while True:
         try:
             nuevo_monto = float(input("Ingrese el nuevo monto: ").strip())
@@ -776,7 +784,7 @@ def modificar_cuota_mes(conexion):
         except ValueError:
             print("Error: ingrese un número válido.")
 
-    # mostrar cuotas afectadas
+    # obtener cuotas
     cursor.execute(
         "SELECT id_pago, id_usuario, monto FROM pagos WHERE anio = %s AND mes = %s;",
         (anio, mes)
@@ -786,17 +794,19 @@ def modificar_cuota_mes(conexion):
     if not cuotas:
         print("\nNo hay cuotas registradas para ese mes y año.")
         cursor.close()
+        input("\nPresione ENTER para continuar...")
         return
 
     print(f"\nCuotas que se actualizarán ({anio}-{mes}):")
     for c in cuotas:
         print(f"ID pago: {c['id_pago']} | Usuario {c['id_usuario']} | Monto actual: {c['monto']}")
 
-    # avisar si el monto es igual al monto existente
+    # aviso si el monto es igual al existente
     montos_iguales = all(float(c["monto"]) == nuevo_monto for c in cuotas)
     if montos_iguales:
         print("\nEl nuevo monto es igual al monto existente en todas las cuotas. No se realizaron cambios.")
         cursor.close()
+        input("\nPresione ENTER para continuar...")
         return
 
     # confirmacion
@@ -807,9 +817,10 @@ def modificar_cuota_mes(conexion):
     if confirmar != "s":
         print("Operación cancelada.")
         cursor.close()
+        input("\nPresione ENTER para continuar...")
         return
 
-    #  transaccion
+    # transaccion
     try:
         conexion.start_transaction()
 
@@ -829,15 +840,15 @@ def modificar_cuota_mes(conexion):
         print("Detalle:", e)
 
     finally:
-        cursor_update.close()
+        try:
+            cursor_update.close()
+        except:
+            pass
         cursor.close()
+        input("\nPresione ENTER para continuar...")
 
 
 
-
-import os
-from conexion import conectar
-from datetime import datetime
 
 
 
